@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 
 import curses
+import sys
 
 def main(scr):
 	curses.use_default_colors()
 
-	ed = Editor(scr)
+	ed = Editor(scr, sys.argv[1:])
 	while ed.process_input():
 		pass
 
 class Editor:
-	def __init__(self, scr):
+	def __init__(self, scr, files):
 		self.scr = scr
 
-		self.win = curses.newwin(curses.LINES - 1, curses.COLS, 0, 0)
-		scr.addstr(curses.LINES - 1, 0, '[no file]')
+		self.buf = Buffer(self, curses.LINES - 1, curses.COLS, 0, 0)
 		self.cursor = Cursor(scr)
-		self.cursor.move()
+		self.status = Status(self, scr)
+		if files:
+			self.buf.load_file(files[0])
+		self.status.draw()
 		scr.refresh()
 
 	def process_input(self):
@@ -49,6 +52,46 @@ class Cursor:
 
 	def move(self):
 		self.scr.move(self.y, self.x)
+
+class Status:
+	def __init__(self, ed, scr):
+		self.ed = ed
+		self.scr = scr
+		self.filename = '[no file]'
+		self.message = ''
+
+	def draw(self):
+		self.scr.move(curses.LINES - 1, 0)
+		self.scr.clrtoeol()
+		self.scr.addstr(self.filename)
+		self.scr.addch(' ')
+		self.scr.addstr(self.message)
+		self.ed.cursor.move()
+
+class Buffer:
+	def __init__(self, ed, height, width, y, x):
+		self.ed = ed
+		self.win = ed.scr.subpad(height, width, y, x)
+		self.lines = []
+
+	def load_file(self, path):
+		try:
+			with open(path, 'r') as f:
+				self.lines.clear()
+				for line in f:
+					if line[-1] == '\n':
+						line = line[:-1]
+					self.lines.append(line)
+			self.ed.status.filename = path
+			self.redraw()
+		except OSError as e:
+			self.ed.status.message = str(e)
+
+	def redraw(self):
+		height, width = self.win.getmaxyx()
+		for i, line in enumerate(self.lines[:height]):
+			self.win.addstr(i, 0, line[:width])
+		self.win.refresh()
 
 if __name__ == '__main__':
 	curses.wrapper(main)
