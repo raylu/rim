@@ -27,21 +27,13 @@ class Editor:
 		if k == 'Q':
 			return False
 		elif k == 'h':
-			if self.cursor.x > 0:
-				self.cursor.x -= 1
-				self.cursor.move()
+			self.buf.move(0, -1)
 		elif k == 'j':
-			if self.cursor.y < curses.LINES - 2:
-				self.cursor.y += 1
-				self.cursor.move()
+			self.buf.move(1, 0)
 		elif k == 'k':
-			if self.cursor.y > 0:
-				self.cursor.y -= 1
-				self.cursor.move()
+			self.buf.move(-1, 0)
 		elif k == 'l':
-			if self.cursor.x < curses.COLS - 1:
-				self.cursor.x += 1
-				self.cursor.move()
+			self.buf.move(0, 1)
 		return True
 
 class Cursor:
@@ -72,7 +64,10 @@ class Buffer:
 	def __init__(self, ed, height, width, y, x):
 		self.ed = ed
 		self.win = ed.scr.subpad(height, width, y, x)
-		self.lines = []
+		self.lines = ['']
+		self.first_line = self.first_col = 0
+		self.pos_y = self.pos_x = 0
+		self.virtual_x = 0 # used to remember x when moving y to a shorter line
 
 	def load_file(self, path):
 		try:
@@ -92,6 +87,22 @@ class Buffer:
 		for i, line in enumerate(self.lines[:height]):
 			self.win.addstr(i, 0, line[:width])
 		self.win.refresh()
+
+	def move(self, y, x):
+		if x:
+			new_x = self.pos_x + x
+			if 0 <= new_x < len(self.lines[self.pos_y]):
+				self.pos_x = self.virtual_x = new_x
+		else:
+			new_y = self.pos_y + y
+			if 0 <= new_y < len(self.lines):
+				self.pos_y = new_y
+				max_x = max(len(self.lines[new_y]) - 1, 0)
+				self.pos_x = min(self.virtual_x, max_x)
+
+		self.ed.cursor.y = self.pos_y - self.first_line
+		self.ed.cursor.x = self.pos_x - self.first_col
+		self.ed.cursor.move()
 
 if __name__ == '__main__':
 	curses.wrapper(main)
