@@ -35,6 +35,18 @@ class Editor:
 			self.buf.move(-1, 0)
 		elif k == 'l':
 			self.buf.move(0, 1)
+		else:
+			try:
+				k = curses.unctrl(k).decode()
+			except TypeError:
+				pass
+			if k == '^D':
+				self.buf.move(curses.LINES // 2, 0)
+			elif k == '^U':
+				self.buf.move(-curses.LINES // 2, 0)
+			else:
+				self.status.message = 'unhandled key %r' % k
+				self.status.draw()
 		return True
 
 class Cursor:
@@ -98,13 +110,14 @@ class Buffer:
 				self.pos_x = self.virtual_x = new_x
 		else:
 			new_y = self.pos_y + y
-			if 0 <= new_y < len(self.lines):
+			new_y = min(max(0, new_y), len(self.lines) - 1)
+			if new_y != self.pos_y:
 				self.pos_y = new_y
-				max_x = max(len(self.lines[new_y]) - 1, 0)
+				max_x = max(len(self.lines[self.pos_y]) - 1, 0)
 				self.pos_x = min(self.virtual_x, max_x)
 
 				# scroll down?
-				scroll = (self.pos_y - self.first_line) - (self.height - self.ed.scrolloff)
+				scroll = (self.pos_y - self.first_line) - (self.height - self.ed.scrolloff - 1)
 				if scroll > 0 and self.first_line + self.height < len(self.lines):
 					# remove lines from top
 					self.win.move(0, 0)
@@ -112,17 +125,18 @@ class Buffer:
 					# add lines to bottom
 					self.first_line += scroll
 					self.win.move(self.height - scroll, 0)
-					start = self.height + self.first_line - 1
+					start = self.height + self.first_line - scroll
 					for i, line in enumerate(self.lines[start:start + scroll]):
 						self.win.addstr(self.height - scroll + i, 0, line[:self.width])
 					self.win.noutrefresh()
 				else:
 					# scroll up?
-					scroll = self.ed.scrolloff - (self.pos_y - self.first_line)
+					scroll = self.first_line - self.pos_y + self.ed.scrolloff
 					if scroll > 0 and self.first_line > 0:
+						scroll = min(scroll, self.first_line)
 						self.first_line -= scroll
-						self.win.move(0, 0)
-						for line in self.lines[self.first_line:self.first_line + scroll]:
+						for line in reversed(self.lines[self.first_line:self.first_line + scroll]):
+							self.win.move(0, 0)
 							self.win.insertln()
 							self.win.addstr(line[:self.width])
 						self.win.noutrefresh()
